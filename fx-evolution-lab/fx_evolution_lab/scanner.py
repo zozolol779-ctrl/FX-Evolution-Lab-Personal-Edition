@@ -17,6 +17,8 @@ class ScannerEngine:
                 full_path = os.path.join(dirpath, filename)
                 if full_path in self.ignore_rules:
                     continue
+                if not os.path.isfile(full_path):
+                    continue
                 yield self._scan_file(full_path)
 
     def _scan_file(self, path: str) -> Dict[str, Any]:
