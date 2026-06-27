@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import difflib
 import os
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 
 class DiffEngine:
@@ -19,9 +19,9 @@ class DiffEngine:
     def _read_file_lines(self, root: str, rel_path: str) -> List[str]:
         try:
             p = os.path.join(root, rel_path)
-            with open(p, "r", encoding="utf-8") as fh:
+            with open(p, "r", encoding="utf-8", errors="replace") as fh:
                 return fh.read().splitlines()
-        except Exception:
+        except OSError:
             return []
 
     def compare(self, old_snapshot: Dict[str, Any], new_snapshot: Dict[str, Any]) -> Dict[str, Any]:
@@ -41,16 +41,35 @@ class DiffEngine:
             if old_files[path].get("sha256") != new_files[path].get("sha256"):
                 modified.append(path)
 
-        # detect renames: removed file sha matches a new file sha with different path
-        new_sha_to_path = {v.get("sha256"): k for k, v in new_files.items()}
-        for path in removed[:]:
+        # detect renames: a removed file whose sha matches a new (added) file's sha
+        # Guards:
+        #   1. Skip when sha is None — None is not a meaningful content fingerprint
+        #      and would cause false positives between any two sha-less files.
+        #   2. Each new-path can only be a rename destination once (track used_destinations)
+        #      to prevent two removed files with identical content both being matched to
+        #      the same new file.
+        new_sha_to_path: Dict[str, str] = {}
+        for new_path, meta in new_files.items():
+            sha = meta.get("sha256")
+            if sha is not None and sha not in new_sha_to_path:
+                new_sha_to_path[sha] = new_path
+
+        used_destinations: Set[str] = set()
+        still_removed: List[str] = []
+        for path in removed:
             sha = old_files[path].get("sha256")
+            if sha is None:
+                still_removed.append(path)
+                continue
             new_path = new_sha_to_path.get(sha)
-            if new_path and new_path != path:
+            if new_path and new_path != path and new_path not in used_destinations:
                 renamed.append((path, new_path))
-                removed.remove(path)
+                used_destinations.add(new_path)
                 if new_path in added:
                     added.remove(new_path)
+            else:
+                still_removed.append(path)
+        removed = still_removed
 
         # compute per-file line diffs and overall similarity
         root_old = old_manifest.get("root_path", self.session.target_project)
@@ -67,13 +86,21 @@ class DiffEngine:
             sm = difflib.SequenceMatcher(a=old_lines, b=new_lines)
             similarity = sm.ratio()
             similarities.append(similarity)
-            # rough added/removed from unified diff
             ud = list(difflib.unified_diff(old_lines, new_lines))
             added_count = sum(1 for l in ud if l.startswith('+') and not l.startswith('+++'))
             removed_count = sum(1 for l in ud if l.startswith('-') and not l.startswith('---'))
             total_added += added_count
             total_removed += removed_count
             file_diffs[path] = {"lines_added": added_count, "lines_removed": removed_count, "similarity": similarity}
+
+        # count lines in truly-added and truly-removed files
+        for path in added:
+            lines = self._read_file_lines(root_new, path)
+            total_added += len(lines)
+
+        for path in removed:
+            lines = self._read_file_lines(root_old, path)
+            total_removed += len(lines)
 
         overall_similarity = float(sum(similarities) / len(similarities)) if similarities else 1.0
 
