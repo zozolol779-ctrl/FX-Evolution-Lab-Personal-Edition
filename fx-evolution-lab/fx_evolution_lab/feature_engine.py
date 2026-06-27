@@ -1,11 +1,23 @@
 from __future__ import annotations
 
 import ast
-from typing import Any, Dict, List, Optional
+import os
+from typing import Any, Dict, List, Optional, Union
 
 
-def _get_signature(node: ast.FunctionDef) -> str:
+def _get_signature(node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> str:
+    """Build a human-readable signature string from a function/method AST node.
+
+    Handles all argument categories in the correct order:
+      positional-only (a, b, /)  →  posonlyargs
+      regular                    →  args
+      var-positional              →  *vararg
+      keyword-only               →  kwonlyargs
+      var-keyword                →  **kwarg
+    """
     parts = []
+    for arg in node.args.posonlyargs:
+        parts.append(arg.arg)
     for arg in node.args.args:
         parts.append(arg.arg)
     if node.args.vararg:
@@ -23,7 +35,7 @@ class FeatureEngine:
         self.registry = registry
 
     def extract(self, module_name: str, name: str) -> Dict[str, Any]:
-        # Backwards-compatible simple extractor (kept for tests that call it)
+        """Backwards-compatible simple extractor (kept for tests that call it directly)."""
         payload = {
             "feature_id": f"feature-{len(self.registry.list_artifacts()) + 1}",
             "module_id": f"module-{module_name}",
@@ -41,15 +53,35 @@ class FeatureEngine:
     def extract_from_file(self, file_path: str, root_path: Optional[str] = None) -> List[Dict[str, Any]]:
         """Parse a Python file using AST and register features found.
 
-        Returns list of registered feature artifacts.
+        Args:
+            file_path:  Absolute (or relative) path to the Python source file.
+            root_path:  When provided, ``file_path`` stored in each artifact is
+                        made relative to this directory instead of stored as-is.
+
+        Returns:
+            List of registered feature artifacts (one per top-level function,
+            async function, class, or method found).
+
+        Raises:
+            FileNotFoundError: If ``file_path`` does not exist.
+            ValueError:        If the file cannot be parsed (e.g. syntax error).
         """
-        with open(file_path, "r", encoding="utf-8") as fh:
+        with open(file_path, "r", encoding="utf-8", errors="replace") as fh:
             source = fh.read()
 
-        tree = ast.parse(source, filename=file_path)
+        try:
+            tree = ast.parse(source, filename=file_path)
+        except SyntaxError as exc:
+            raise ValueError(
+                f"Could not parse '{file_path}': {exc}"
+            ) from exc
+
+        stored_path = (
+            os.path.relpath(file_path, root_path) if root_path is not None else file_path
+        )
+
         features: List[Dict[str, Any]] = []
 
-        # collect imports for the file
         imports: List[str] = []
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
@@ -61,7 +93,6 @@ class FeatureEngine:
                     fq = f"{mod}.{n.name}" if mod else n.name
                     imports.append(fq)
 
-        # traverse top-level for classes and functions
         for node in tree.body:
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 sig = _get_signature(node)
@@ -73,7 +104,7 @@ class FeatureEngine:
                     parents=[],
                     line_start=node.lineno,
                     line_end=getattr(node, "end_lineno", node.lineno),
-                    file_path=file_path,
+                    file_path=stored_path,
                     imports=imports,
                 )
                 features.append(payload)
@@ -87,12 +118,11 @@ class FeatureEngine:
                     parents=bases,
                     line_start=node.lineno,
                     line_end=getattr(node, "end_lineno", node.lineno),
-                    file_path=file_path,
+                    file_path=stored_path,
                     imports=imports,
                 )
                 features.append(class_payload)
 
-                # methods
                 for item in node.body:
                     if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                         sig = _get_signature(item)
@@ -104,7 +134,7 @@ class FeatureEngine:
                             parents=[node.name],
                             line_start=item.lineno,
                             line_end=getattr(item, "end_lineno", item.lineno),
-                            file_path=file_path,
+                            file_path=stored_path,
                             imports=imports,
                         )
                         features.append(method_payload)
