@@ -1,0 +1,167 @@
+Sprint-Based Development Protocol
+
+You are working on a mature codebase that has already completed multiple stabilization phases.
+
+The following engines are considered stable, verified, committed, and pushed to GitHub:
+
+- Scanner Engine
+- Feature Engine
+- Diff Engine
+- Dependency Engine
+- Impact Engine
+- Regression Engine
+- Root Cause Engine
+
+Treat these components as the project's trusted baseline.
+
+Critical Operating Rules
+
+- DO NOT re-read the entire project.
+- DO NOT perform another full codebase audit.
+- DO NOT review previously completed engines.
+- DO NOT redesign previously completed architecture.
+- DO NOT refactor outside the current task.
+- DO NOT modify unrelated files.
+- DO NOT consume tokens analyzing completed work.
+
+Previously completed work should only be revisited if:
+
+- a failing test proves a dependency issue,
+- a compile/runtime error requires investigation,
+- or the current task cannot be completed without a minimal dependency change.
+
+Assume the current baseline is correct unless objective evidence proves otherwise.
+
+---
+
+Development Workflow
+
+Follow this workflow exactly.
+
+1. Read ONLY the files required for the current task.
+2. Run ONLY the tests related to the current task.
+3. Write comprehensive edge-case tests.
+4. Run those edge-case tests.
+5. Fix confirmed bugs only.
+6. Re-run the task-specific tests.
+7. Run the COMPLETE test suite ONCE and ONLY after all fixes are finished.
+8. If every test passes:
+   - git add .
+   - git commit
+   - git push origin main
+9. Produce a concise engineering report.
+10. STOP immediately.
+
+Never continue into another task.
+
+Never start another engine.
+
+Wait for my next instruction.
+
+---
+
+Current Sprint
+
+Sprint 4 — Stabilization & Consolidation
+
+---
+
+Active Task
+
+Task 1 — Report Engine Review
+
+Scope:
+
+- Read only the Report Engine implementation and its directly related files.
+- Read only the tests related to Report Engine.
+
+Do not inspect other engines unless a failing test requires it.
+
+---
+
+Objectives
+
+1. Review the Report Engine implementation.
+
+2. Execute the existing Report Engine tests.
+
+3. Write comprehensive edge-case tests covering:
+   
+   - path matching
+   - filename matching
+   - nested directories
+   - unguarded endswith false positives
+   - missing artifacts
+   - malformed inputs
+   - duplicate artifacts
+   - empty reports
+   - invalid report metadata
+   - robustness against unexpected inputs
+
+4. Execute the new edge-case tests.
+
+5. Fix ONLY confirmed bugs.
+
+Do not introduce speculative improvements.
+
+6. Execute the Report Engine test suite again.
+
+7. Execute the FULL project test suite exactly ONE time.
+
+The full suite must pass with zero failures.
+
+---
+
+Git Rules
+
+If and ONLY if the full test suite passes:
+
+Run:
+
+git add .
+
+git commit -m "Sprint 4: Task 1 - Report Engine review and bug fixes"
+
+git push origin main
+
+If any test fails:
+
+DO NOT commit.
+
+DO NOT push.
+
+Continue fixing until every test passes.
+
+---
+
+Deliverables
+
+When finished, produce a concise report containing:
+
+- bugs discovered
+- bugs fixed
+- new edge-case tests added
+- files modified
+- compatibility impact
+- test results
+- total test count
+- commit SHA
+- confirmation that GitHub push succeeded
+
+Keep the report concise.
+
+---
+
+Stop Condition
+
+After the successful push:
+
+STOP.
+
+Do not start Task 2.
+
+Do not perform additional analysis.
+
+Do not suggest future work.
+
+Wait for my next instruction.
