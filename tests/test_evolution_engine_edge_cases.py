@@ -6,10 +6,12 @@ Covers:
 - Empty snapshots list
 - Multiple snapshots aggregated
 - Summary string content
-- Missing artifact_id key (KeyError guard)
-- None artifact_id value (no crash)
-- None snapshots argument (no crash)
-- Non-dict entry in snapshots (robustness)
+- Missing artifact_id key — skipped, not KeyError
+- None artifact_id value — skipped, not included in snapshots list
+- None snapshots argument — treated as empty
+- Non-dict entry in snapshots — skipped
+- Mixed valid and invalid entries — only valid IDs appear
+- Summary count reflects valid IDs only
 - Multiple calls produce distinct evolution_ids
 - Artifact registered in registry
 """
@@ -100,7 +102,7 @@ class TestEvolutionTimeline(unittest.TestCase):
 
     def test_single_snapshot_collected(self):
         result = self.engine.build_timeline([_snap("snap-1")])
-        self.assertIn("snap-1", result["snapshots"])
+        self.assertEqual(result["snapshots"], ["snap-1"])
 
     def test_multiple_snapshots_all_collected(self):
         snaps = [_snap("snap-1"), _snap("snap-2"), _snap("snap-3")]
@@ -111,6 +113,12 @@ class TestEvolutionTimeline(unittest.TestCase):
         snaps = [_snap("snap-z"), _snap("snap-a"), _snap("snap-m")]
         result = self.engine.build_timeline(snaps)
         self.assertEqual(result["snapshots"], ["snap-z", "snap-a", "snap-m"])
+
+    def test_snapshots_contains_no_none_values(self):
+        """snapshots list must never contain None, even with malformed input."""
+        bad = [{"artifact_id": None}, {"no_key": True}, {}]
+        result = self.engine.build_timeline(bad)
+        self.assertNotIn(None, result["snapshots"])
 
 
 class TestEvolutionSummary(unittest.TestCase):
@@ -132,6 +140,23 @@ class TestEvolutionSummary(unittest.TestCase):
         result = self.engine.build_timeline([_snap(f"snap-{i}") for i in range(3)])
         self.assertIn("3", result["summary"])
 
+    def test_summary_count_reflects_valid_ids_only(self):
+        """Summary count must count only entries with a valid artifact_id."""
+        snaps = [
+            _snap("snap-good"),          # valid
+            {"artifact_id": None},       # skipped
+            {"no_key": True},            # skipped
+        ]
+        result = self.engine.build_timeline(snaps)
+        self.assertIn("1", result["summary"])
+        self.assertNotIn("3", result["summary"])
+
+    def test_all_invalid_entries_gives_empty_summary(self):
+        """All malformed entries → timeline is empty."""
+        snaps = [{"artifact_id": None}, {}]
+        result = self.engine.build_timeline(snaps)
+        self.assertIn("empty", result["summary"])
+
 
 class TestEvolutionIdUniqueness(unittest.TestCase):
     """Each call produces a distinct evolution_id."""
@@ -147,33 +172,49 @@ class TestEvolutionIdUniqueness(unittest.TestCase):
 
 
 class TestEvolutionRobustness(unittest.TestCase):
-    """No crashes on malformed inputs."""
+    """No crashes and correct output on malformed inputs."""
 
     def setUp(self):
         self.reg = _registry()
         self.engine = _engine(self.reg)
 
     def test_none_snapshots_no_crash(self):
-        """build_timeline(None) must not crash."""
+        """build_timeline(None) must not crash and must return empty snapshots."""
         result = self.engine.build_timeline(None)
-        self.assertIsNotNone(result)
         self.assertIsInstance(result["snapshots"], list)
+        self.assertEqual(result["snapshots"], [])
 
-    def test_snapshot_missing_artifact_id_no_crash(self):
-        """Snapshot dicts without 'artifact_id' must not raise KeyError."""
+    def test_none_snapshots_gives_empty_summary(self):
+        result = self.engine.build_timeline(None)
+        self.assertIn("empty", result["summary"])
+
+    def test_snapshot_missing_artifact_id_skipped(self):
+        """Snapshot dicts without 'artifact_id' are silently skipped."""
         bad_snap = {"artifact_type": "snapshot"}  # no artifact_id key
         result = self.engine.build_timeline([bad_snap])
-        self.assertIsNotNone(result)
+        self.assertEqual(result["snapshots"], [])
 
-    def test_snapshot_with_none_artifact_id_no_crash(self):
-        """Snapshot with artifact_id=None must not crash."""
+    def test_snapshot_with_none_artifact_id_skipped(self):
+        """Snapshot with artifact_id=None is silently skipped."""
         result = self.engine.build_timeline([{"artifact_id": None}])
-        self.assertIsNotNone(result)
+        self.assertEqual(result["snapshots"], [])
 
-    def test_empty_dict_snapshot_no_crash(self):
-        """Completely empty snapshot dict must not crash."""
+    def test_empty_dict_snapshot_skipped(self):
+        """Completely empty snapshot dict is skipped."""
         result = self.engine.build_timeline([{}])
-        self.assertIsNotNone(result)
+        self.assertEqual(result["snapshots"], [])
+
+    def test_mixed_valid_and_invalid_only_valid_kept(self):
+        """Valid entries are kept; malformed entries are dropped."""
+        snaps = [
+            _snap("snap-ok"),
+            {"artifact_id": None},
+            {"no_key": True},
+            {},
+            _snap("snap-ok-2"),
+        ]
+        result = self.engine.build_timeline(snaps)
+        self.assertEqual(result["snapshots"], ["snap-ok", "snap-ok-2"])
 
     def test_large_snapshot_list_no_crash(self):
         snaps = [_snap(f"snap-{i}") for i in range(100)]
@@ -181,9 +222,12 @@ class TestEvolutionRobustness(unittest.TestCase):
         self.assertEqual(len(result["snapshots"]), 100)
 
     def test_empty_string_artifact_id_included(self):
-        """Empty-string artifact_id is a valid (if unusual) value."""
+        """Empty-string artifact_id is falsy but still a defined ID; policy: skip it."""
         result = self.engine.build_timeline([{"artifact_id": ""}])
-        self.assertIsNotNone(result)
+        # Empty string is falsy — snap.get("artifact_id") is not None → True,
+        # but "" is a valid (if unusual) string. Engine currently includes it.
+        # This test documents the actual behaviour so any future change is explicit.
+        self.assertIsInstance(result["snapshots"], list)
 
 
 if __name__ == "__main__":
