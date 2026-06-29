@@ -13,6 +13,6 @@ class ManifestEngine:
             "schema_version": self.session.schema_version,
             "generated_at": self.session.started_at,
             "root_path": self.session.target_project,
-            "files": files,
+            "files": files if files is not None else [],
         }
         return self.registry.register("manifest", manifest)
