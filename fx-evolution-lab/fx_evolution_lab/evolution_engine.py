@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 
 class EvolutionEngine:
@@ -8,8 +8,10 @@ class EvolutionEngine:
         self.session = session
         self.registry = registry
 
-    def build_timeline(self, snapshots: List[Dict[str, Any]]) -> Dict[str, Any]:
-        snapshot_ids = [snap["artifact_id"] for snap in snapshots]
+    def build_timeline(self, snapshots: Optional[List[Dict[str, Any]]]) -> Dict[str, Any]:
+        if not snapshots:
+            snapshots = []
+        snapshot_ids = [snap.get("artifact_id") for snap in snapshots if isinstance(snap, dict)]
         summary = f"timeline contains {len(snapshot_ids)} snapshot(s)" if snapshot_ids else "timeline is empty"
         payload = {
             "evolution_id": f"evolution-{len(self.registry.list_artifacts()) + 1}",
