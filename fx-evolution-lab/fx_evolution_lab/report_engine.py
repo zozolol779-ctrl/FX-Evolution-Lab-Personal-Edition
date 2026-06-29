@@ -3,6 +3,27 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 
+def _path_matches(feature_path: str, diff_path: str) -> bool:
+    """Return True when feature_path and diff_path refer to the same file.
+
+    Guards against raw ``endswith()`` false positives that arise when the diff
+    path is a bare string suffix of the feature path without a separator
+    boundary.  For example::
+
+        "xsrc/utils.py".endswith("src/utils.py")  # True — wrong
+        "src/utils.py".endswith("utils.py")        # True — wrong
+
+    Only two forms are accepted as a match:
+
+    * exact equality (``feature_path == diff_path``), or
+    * ``feature_path`` ends with ``"/" + diff_path`` (diff_path is a proper
+      path suffix — the preceding character must be a separator).
+    """
+    if not feature_path or not diff_path:
+        return False
+    return feature_path == diff_path or feature_path.endswith("/" + diff_path)
+
+
 class ReportEngine:
     def __init__(self, session: Any, registry: Any):
         self.session = session
@@ -35,14 +56,14 @@ class ReportEngine:
             kind = feature.get("kind")
             file_path = feature.get("file_path") or ""
             if kind == "function":
-                if any(file_path.endswith(p) for p in files_added):
+                if any(_path_matches(file_path, p) for p in files_added):
                     functions_added.append(feature.get("name"))
-                if any(file_path.endswith(p) for p in files_removed):
+                if any(_path_matches(file_path, p) for p in files_removed):
                     functions_removed.append(feature.get("name"))
             elif kind == "class":
-                if any(file_path.endswith(p) for p in files_added):
+                if any(_path_matches(file_path, p) for p in files_added):
                     classes_added.append(feature.get("name"))
-                if any(file_path.endswith(p) for p in files_removed):
+                if any(_path_matches(file_path, p) for p in files_removed):
                     classes_removed.append(feature.get("name"))
 
         for regression in regressions:

@@ -338,6 +338,21 @@ class TestReportFunctionsAdded(unittest.TestCase):
         result = self.engine.build("summary", [])
         self.assertNotIn("helper", result["functions_added"])
 
+    def test_no_false_positive_reversed_suffix(self):
+        """src/utils.py added must NOT match feature at xsrc/utils.py.
+
+        'xsrc/utils.py'.endswith('src/utils.py') is True without a boundary
+        guard — this test catches that raw-endswith false positive.
+        """
+        _reg_diff(self.reg, files_added=["src/utils.py"])
+        _reg_feature(self.reg, "helper", "function", "xsrc/utils.py")
+        result = self.engine.build("summary", [])
+        self.assertNotIn(
+            "helper",
+            result["functions_added"],
+            "xsrc/utils.py must NOT match diff path src/utils.py",
+        )
+
     def test_nested_directory_exact_match(self):
         """Feature at a/b/c/utils.py must match diff path a/b/c/utils.py."""
         _reg_diff(self.reg, files_added=["a/b/c/utils.py"])
@@ -389,6 +404,20 @@ class TestReportFunctionsRemoved(unittest.TestCase):
             "helper",
             result["functions_removed"],
             "old_src/utils.py must NOT match feature at src/utils.py",
+        )
+
+    def test_no_false_positive_removed_reversed_suffix(self):
+        """src/utils.py removed must NOT match feature at xsrc/utils.py.
+
+        'xsrc/utils.py'.endswith('src/utils.py') is True without boundary guard.
+        """
+        _reg_diff(self.reg, files_removed=["src/utils.py"])
+        _reg_feature(self.reg, "helper", "function", "xsrc/utils.py")
+        result = self.engine.build("summary", [])
+        self.assertNotIn(
+            "helper",
+            result["functions_removed"],
+            "xsrc/utils.py must NOT match diff path src/utils.py",
         )
 
     def test_nested_removed_boundary_guard(self):
