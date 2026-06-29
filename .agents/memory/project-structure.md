@@ -17,11 +17,12 @@ description: FX Evolution Lab layout, test command, engine review sequence, key 
 4. ✅ Impact Engine
 5. ✅ Regression Engine (+ production-grade upgrade via regression_analysis.py)
 6. ✅ Root Cause Engine
-7. ⬜ Report Engine
+7. ✅ Report Engine
 8. ⬜ Evolution Engine
 
 ## Test counts by engine (as of Root Cause Engine completion)
-- Total: 229 / 229 passing
+- Total: 285 / 285 passing
+- Report Engine: 56 tests (54 pre-existing + 2 new)
 - Root Cause: 40 tests (39 edge cases + 1 integration)
 - Regression: 75 tests
 - Impact: 37, Feature: 37, Dependency: 25, Diff: 25, Core/misc: 9

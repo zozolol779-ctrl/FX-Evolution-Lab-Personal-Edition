@@ -2,3 +2,4 @@
 - [Regression Engine upgrade](regression-engine.md) — HashCache keyed on id(artifact), full_hash short-circuit, severity thresholds
 - [Root Cause Engine fixes](root-cause-engine.md) — 4 bugs fixed; _file_matches boundary guard; behavior_changed now handled
 - [Codebase audit findings](codebase-audit.md) — schemas.py dead code, 4 lookup patterns, fragile IDs, endswith false positives
+- [Report Engine review](report-engine.md) — endswith false positive fixed via _path_matches(); 56 tests passing; commit 92d4c15
